@@ -1,0 +1,485 @@
+{
+  // SimpleHub RESTful API 规范
+  // 字段命名: 所有 JSON key 使用小驼峰 (camelCase)
+  // 认证: Bearer JWT token (除 /api/auth/login)
+  // 加密字段: apiKey → api_key_enc(DB), proxyUrl → proxy_url_enc(DB), billingAuthValue → billing_auth_value(DB)
+  //    Get detail 时解密返回明文, List 时不返回加密字段
+
+  "endpoints": [
+    // ──────────────────────────────────────────────
+    // Auth
+    // ──────────────────────────────────────────────
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "auth": false,
+      "description": "管理员登录，获取 JWT token",
+      "request": {
+        "body": {
+          "email":    { "type": "string", "required": true },
+          "password": { "type": "string", "required": true }
+        }
+      },
+      "response": {
+        "200": { "body": { "token": "string" } },
+        "401": { "body": { "error": "管理员账号或密码错误" } }
+      }
+    },
+
+    // ──────────────────────────────────────────────
+    // Sites - CRUD
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/sites",
+      "auth": true,
+      "description": "获取站点列表（支持搜索）",
+      "request": {
+        "query": {
+          "search": { "type": "string", "required": false, "desc": "按名称/URL搜索" }
+        }
+      },
+      "response": {
+        "200": {
+          "body": "Site[]",
+          "fields": {
+            "id": "string", "name": "string", "baseUrl": "string",
+            "apiType": "string", "userId": "string?", "billingUrl": "string?",
+            "billingAuthType": "string", "billingLimitField": "string?",
+            "billingUsageField": "string?", "unlimitedQuota": "boolean",
+            "enableCheckIn": "boolean", "checkInMode": "string",
+            "scheduleCron": "string?", "timezone": "string",
+            "pinned": "boolean", "excludeFromBatch": "boolean",
+            "categoryId": "string?", "extralink": "string?", "remark": "string?",
+            "sortOrder": "integer", "lastCheckedAt": "datetime?",
+            "createdAt": "datetime",
+            "category": "Category?",
+            // 以下字段来自最新快照, 仅 List 返回
+            "billingLimit": "number?", "billingUsage": "number?",
+            "billingError": "string?", "checkInSuccess": "boolean?",
+            "checkInMessage": "string?", "checkInError": "string?"
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites",
+      "auth": true,
+      "description": "创建站点",
+      "request": {
+        "body": {
+          "name":             { "type": "string", "required": true },
+          "baseUrl":          { "type": "string", "required": true },
+          "apiKey":           { "type": "string", "required": true, "desc": "明文, 服务端加密存储" },
+          "apiType":          { "type": "string", "required": false, "default": "other", "enum": ["newapi","veloera","donehub","voapi","other"] },
+          "userId":           { "type": "string", "required": false, "default": null },
+          "billingUrl":       { "type": "string", "required": false, "default": null },
+          "billingAuthType":  { "type": "string", "required": false, "default": "token", "enum": ["token","cookie"] },
+          "billingAuthValue": { "type": "string", "required": false, "default": null, "desc": "明文, 服务端加密存储" },
+          "proxyUrl":         { "type": "string", "required": false, "default": null, "desc": "明文, 服务端加密存储" },
+          "billingLimitField":  { "type": "string", "required": false, "default": null },
+          "billingUsageField":  { "type": "string", "required": false, "default": null },
+          "unlimitedQuota":   { "type": "boolean", "required": false, "default": false },
+          "enableCheckIn":    { "type": "boolean", "required": false, "default": false },
+          "checkInMode":      { "type": "string", "required": false, "default": "both", "enum": ["model","checkin","both"] },
+          "scheduleCron":     { "type": "string", "required": false, "default": null },
+          "timezone":         { "type": "string", "required": false, "default": "UTC" },
+          "pinned":           { "type": "boolean", "required": false, "default": false },
+          "excludeFromBatch": { "type": "boolean", "required": false, "default": false },
+          "categoryId":       { "type": "string", "required": false, "default": null },
+          "extralink":        { "type": "string", "required": false, "default": null },
+          "remark":           { "type": "string", "required": false, "default": null },
+          "sortOrder":        { "type": "integer", "required": false, "default": 0 }
+        }
+      },
+      "response": {
+        "201": { "body": "Site (同 List 字段, 不含 apiKey/proxyUrlEnc/billingAuthValue 等加密存储字段)" },
+        "400": { "body": { "error": "请提供必填字段" } }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/sites/:id",
+      "auth": true,
+      "description": "获取站点详情（解密敏感字段）",
+      "response": {
+        "200": {
+          "body": "SiteDetailResponse",
+          "fields": {
+            "//": "继承 Site 所有字段, 额外追加:",
+            "token":     { "type": "string?", "desc": "解密后的 apiKey" },
+            "type":      { "type": "string",  "desc": "apiType 的别名" },
+            "proxyUrl":  { "type": "string?", "desc": "解密后的代理URL" },
+            "billingAuthValue": { "type": "string?", "desc": "解密后的额度认证值" }
+          }
+        },
+        "404": { "body": { "error": "站点不存在" } }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/sites/:id",
+      "auth": true,
+      "description": "更新站点（部分更新, 未传字段保持原值）",
+      "note": "布尔字段即使传 false 也会更新; 可空字段传 null 会置空; 所有字段可选",
+      "request": {
+        "body": {
+          // 同 Create body, 但所有字段为 optional（包括 name/baseUrl/apiKey）
+          "name":             { "type": "string", "required": false },
+          "baseUrl":          { "type": "string", "required": false },
+          "apiKey":           { "type": "string", "required": false, "desc": "有值才更新, 自动加密" },
+          "apiType":          { "type": "string", "required": false },
+          "userId":           { "type": "string", "required": false, "nullable": true },
+          "billingUrl":       { "type": "string", "required": false, "nullable": true },
+          "billingAuthType":  { "type": "string", "required": false },
+          "billingAuthValue": { "type": "string", "required": false, "nullable": true, "desc": "自动加密" },
+          "proxyUrl":         { "type": "string", "required": false, "nullable": true, "desc": "自动加密" },
+          "billingLimitField":  { "type": "string", "required": false, "nullable": true },
+          "billingUsageField":  { "type": "string", "required": false, "nullable": true },
+          "unlimitedQuota":   { "type": "boolean", "required": false },
+          "enableCheckIn":    { "type": "boolean", "required": false },
+          "checkInMode":      { "type": "string", "required": false },
+          "scheduleCron":     { "type": "string", "required": false, "nullable": true },
+          "timezone":         { "type": "string", "required": false },
+          "pinned":           { "type": "boolean", "required": false },
+          "excludeFromBatch": { "type": "boolean", "required": false },
+          "categoryId":       { "type": "string", "required": false, "nullable": true },
+          "extralink":        { "type": "string", "required": false, "nullable": true },
+          "remark":           { "type": "string", "required": false, "nullable": true },
+          "sortOrder":        { "type": "integer", "required": false }
+        }
+      },
+      "response": {
+        "200": { "body": { "success": true } },
+        "400": { "body": { "error": "..." } }
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/sites/:id",
+      "auth": true,
+      "description": "删除站点（级联删除快照/差异）",
+      "response": {
+        "200": { "body": { "success": true } }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites/reorder",
+      "auth": true,
+      "description": "批量更新站点排序",
+      "request": {
+        "body": {
+          "ids": { "type": "string[]", "required": true, "desc": "按排序顺序排列的 ID 数组" }
+        }
+      },
+      "response": {
+        "200": { "body": { "success": true } }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites/:id/check",
+      "auth": true,
+      "description": "手动检测站点",
+      "request": {
+        "query": {
+          "skipNotification": { "type": "string", "required": false, "desc": "\"true\" 跳过通知" }
+        }
+      },
+      "response": {
+        "200": { "body": "CheckResult (包含 models, hasChanges, billingLimit 等)" },
+        "500": { "body": { "error": "检测失败: ..." } }
+      }
+    },
+
+    // ──────────────────────────────────────────────
+    // Sites - Snapshots & Diffs
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/sites/:id/snapshots",
+      "auth": true,
+      "description": "获取站点快照列表（仅成功快照）",
+      "response": {
+        "200": { "body": "ModelSnapshot[]" }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/sites/:id/latest-snapshot",
+      "auth": true,
+      "description": "获取站点最新快照",
+      "response": {
+        "200": { "body": "ModelSnapshot" },
+        "404": { "body": { "error": "无快照数据" } }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/sites/:id/diffs",
+      "auth": true,
+      "description": "获取站点模型差异列表",
+      "response": {
+        "200": { "body": "ModelDiff[]" }
+      }
+    },
+
+    // ──────────────────────────────────────────────
+    // Sites - Tokens (代理到上游 API)
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/sites/:id/tokens",
+      "auth": true,
+      "description": "代理获取令牌列表（跳过测试）"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites/:id/tokens",
+      "auth": true,
+      "description": "代理创建令牌（跳过测试）"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/sites/:id/tokens",
+      "auth": true,
+      "description": "代理更新令牌（跳过测试）"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/sites/:id/tokens/:tokenId",
+      "auth": true,
+      "description": "代理删除令牌（跳过测试）"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites/:id/tokens/:tokenId/key",
+      "auth": true,
+      "description": "获取令牌完整key（跳过测试）"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sites/:id/groups",
+      "auth": true,
+      "description": "代理获取分组列表（跳过测试）"
+    },
+    {
+      "method": "GET",
+      "path": "/api/sites/:id/pricing",
+      "auth": true,
+      "description": "代理获取定价信息（跳过测试）"
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites/:id/redeem",
+      "auth": true,
+      "description": "代理兑换码（跳过测试）"
+    },
+
+    // ──────────────────────────────────────────────
+    // Export / Import
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/sites/export",
+      "auth": true,
+      "description": "导出所有站点和分类（加密字段已解密）",
+      "response": {
+        "200": {
+          "body": {
+            "version": "string",
+            "exportDate": "string (ISO datetime)",
+            "categories": "Category[]",
+            "sites": "ExportedSite[] (apiKey/proxyUrl/billingAuthValue 已解密, apiType 作为 type)"
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/exports/sites",
+      "auth": true,
+      "description": "导出别名（同 /api/sites/export）",
+      "response": { "200": "同 /api/sites/export" }
+    },
+    {
+      "method": "POST",
+      "path": "/api/sites/import",
+      "auth": true,
+      "description": "导入站点和分类",
+      "request": {
+        "body": {
+          "version":    { "type": "string", "required": false },
+          "exportDate": { "type": "string", "required": false },
+          "categories": { "type": "Category[]", "required": false, "desc": "每个含 name/scheduleCron/timezone" },
+          "sites": {
+            "type": "ExportedSite[]", "required": true,
+            "fields": {
+              "name": "string (required)", "baseUrl": "string (required)",
+              "apiKey": "string (required)", "apiType": "string",
+              "userId": "string?", "scheduleCron": "string?",
+              "timezone": "string", "pinned": "boolean",
+              "excludeFromBatch": "boolean", "billingUrl": "string?",
+              "billingAuthType": "string", "billingAuthValue": "string?",
+              "proxyUrl": "string?", "billingLimitField": "string?",
+              "billingUsageField": "string?", "unlimitedQuota": "boolean",
+              "enableCheckIn": "boolean", "checkInMode": "string",
+              "categoryName": "string? (按名称匹配/创建分类)"
+            }
+          }
+        }
+      },
+      "response": {
+        "200": { "body": { "imported": "integer", "total": "integer", "errors?": "string[]" } },
+        "400": { "body": { "error": "..." } }
+      }
+    },
+
+    // ──────────────────────────────────────────────
+    // Categories
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/categories",
+      "auth": true,
+      "description": "获取分类列表（含每个分类下的站点）",
+      "response": {
+        "200": {
+          "body": "Category[]",
+          "fields": {
+            "id": "string", "name": "string", "scheduleCron": "string?",
+            "timezone": "string", "createdAt": "datetime", "updatedAt": "datetime",
+            "sites": "Site[]"
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/categories",
+      "auth": true,
+      "description": "创建分类",
+      "request": {
+        "body": {
+          "name":         { "type": "string", "required": true },
+          "scheduleCron": { "type": "string", "required": false, "default": null },
+          "timezone":     { "type": "string", "required": false, "default": "Asia/Shanghai" }
+        }
+      },
+      "response": {
+        "200": { "body": "Category" },
+        "400": { "body": { "error": "分类名称已存在" } }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/categories/:id",
+      "auth": true,
+      "description": "更新分类",
+      "request": {
+        "body": {
+          "name":         { "type": "string", "required": false },
+          "scheduleCron": { "type": "string", "required": false, "nullable": true },
+          "timezone":     { "type": "string", "required": false }
+        }
+      },
+      "response": { "200": { "body": "Category" } }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/categories/:id",
+      "auth": true,
+      "description": "删除分类（其下站点 categoryId 置 null）",
+      "response": { "200": { "body": { "success": true } } }
+    },
+    {
+      "method": "POST",
+      "path": "/api/categories/:id/check",
+      "auth": true,
+      "description": "一键检测分类下所有站点",
+      "request": {
+        "query": {
+          "skipNotification": { "type": "string", "required": false }
+        }
+      },
+      "response": { "200": { "body": "CheckResult" } }
+    },
+
+    // ──────────────────────────────────────────────
+    // Email Config
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/email-config",
+      "auth": true,
+      "description": "获取邮件通知配置（不返回加密 API Key）",
+      "response": {
+        "200": {
+          "body": {
+            "id": "string?", "enabled": "boolean",
+            "notifyEmails": "string (逗号分隔)",
+            "createdAt": "datetime?", "updatedAt": "datetime?"
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/email-config",
+      "auth": true,
+      "description": "创建/更新邮件通知配置",
+      "request": {
+        "body": {
+          "resendApiKey":  { "type": "string", "required": true, "desc": "明文, 服务端加密存储" },
+          "notifyEmails":  { "type": "string", "required": true, "desc": "逗号分隔的邮箱列表" },
+          "enabled":       { "type": "boolean", "required": false, "default": true }
+        }
+      },
+      "response": {
+        "200": { "body": "EmailConfig (不含 resendApiKeyEnc)" },
+        "400": { "body": { "error": "..." } }
+      }
+    },
+
+    // ──────────────────────────────────────────────
+    // Schedule Config
+    // ──────────────────────────────────────────────
+    {
+      "method": "GET",
+      "path": "/api/schedule-config",
+      "auth": true,
+      "description": "获取定时检测配置",
+      "response": {
+        "200": {
+          "body": {
+            "id": "string", "enabled": "boolean", "hour": "integer (0-23)",
+            "minute": "integer (0-59)", "timezone": "string",
+            "interval": "integer (5-300s)", "overrideIndividual": "boolean",
+            "lastRun": "datetime?", "createdAt": "datetime", "updatedAt": "datetime"
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/schedule-config",
+      "auth": true,
+      "description": "更新定时检测配置",
+      "request": {
+        "body": {
+          "enabled":            { "type": "boolean", "required": true },
+          "hour":               { "type": "integer", "required": true, "min": 0, "max": 23 },
+          "minute":             { "type": "integer", "required": true, "min": 0, "max": 59 },
+          "interval":           { "type": "integer", "required": true, "min": 5, "max": 300 },
+          "overrideIndividual": { "type": "boolean", "required": false, "default": false }
+        }
+      },
+      "response": {
+        "200": { "body": { "success": true } },
+        "400": { "body": { "error": "..." } }
+      }
+    }
+  ]
+}

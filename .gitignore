@@ -1,0 +1,29 @@
+# --- Go ---
+/bin/
+/server
+/server.exe
+*.exe
+
+# --- Frontend ---
+/web/node_modules/
+/web/dist/
+
+# --- IDE & OS ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Python ---
+__pycache__/
+*.pyc
+
+# --- Runtime ---
+/data/
+.env
+
+# --- Release artifacts ---
+/releases/
