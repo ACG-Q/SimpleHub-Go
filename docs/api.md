@@ -327,16 +327,162 @@
 
 ### Sites Tokens (Proxy)
 
-以下端点代理到上游 API，按站点 `apiType` 自动路由。
+以下端点代理到上游 API，按站点 `apiType` 自动路由路径和认证方式。
+`newapi` / `veloera` / `donehub` 共享大部分路径和 `Bearer` 认证，`voapi` 使用独立路径和原始 Key 认证。
+`other` 类型不支持以上所有代理接口。
+
+**认证差异：**
+
+| apiType | Authorization 标头 | 额外标头 |
+|---------|-------------------|----------|
+| newapi | `Bearer <apiKey>` | `New-Api-User: <userId>` |
+| veloera | `Bearer <apiKey>` | `Veloera-User: <userId>` |
+| voapi | `<apiKey>`（无 Bearer） | 无 |
+| donehub | `Bearer <apiKey>` | 无 |
+
+---
 
 #### GET /api/sites/:id/tokens
+
+获取站点令牌列表。
+
+| apiType | 上游路径 | 响应转换 |
+|---------|----------|----------|
+| newapi | `/api/token/` | `transformNewapiTokens` — 从 `data.items` 提取，key 加 `sk-` 前缀 |
+| veloera | `/api/token/` | `transformNewapiTokens` |
+| voapi | `/api/keys` | `transformVoapiTokens` — 从 `data.records` 提取，字段映射 |
+| donehub | `/api/token/` | 无转换，直接透传 |
+
+---
+
 #### POST /api/sites/:id/tokens
+
+创建令牌。
+
+| apiType | 上游路径 | 请求转换 | 响应转换 |
+|---------|----------|----------|----------|
+| newapi | `/api/token/` | `transformNewapiCreateRequest` — camelCase→snake_case，加 `remain_amount` 等 | 无 |
+| veloera | `/api/token/` | `transformNewapiCreateRequest` | 无 |
+| voapi | `/api/keys` | `transformVoapiCreateRequest` — `remainQuota/500000→amount`，过期处理 | `transformVoapiCreateResponse` — `{code:...}→{success:...}` |
+| donehub | `/api/token/` | 无转换 | 无 |
+
+**NewAPI / Veloera 请求体：**
+
+```json
+{
+  "name": "string (required)",
+  "unlimitedQuota": "boolean?",
+  "remainQuota": "number?",
+  "expiredTime": "number? (Unix 毫秒时间戳)",
+  "whiteList": "number[]?"
+}
+```
+
+**VOAPI 请求体（经转换后发送）：**
+
+```json
+{
+  "amount": "number (remainQuota / 500000)",
+  "boundlessAmount": "boolean",
+  "enable": "boolean",
+  "expireTime": "number? (-1 表示永不过期)",
+  "genCount": "number",
+  "groups": "string[]"
+}
+```
+
+---
+
 #### PUT /api/sites/:id/tokens
+
+更新令牌。
+
+| apiType | 上游路径 | 说明 |
+|---------|----------|------|
+| newapi | `/api/token/` | 直接透传，无转换 |
+| veloera | `/api/token/` | 直接透传 |
+| voapi | `PUT /api/keys/{id}` | **内联处理**（不走通用代理），`transformVoapiUpdateRequest` / `transformVoapiUpdateResponse` |
+| donehub | `/api/token/` | 直接透传 |
+
+**VOAPI 请求体：**
+
+```json
+{
+  "id": "string (required)",
+  "name": "string?",
+  "unlimitedQuota": "boolean?",
+  "remainQuota": "number? (除以 500000 后发送)",
+  "expiredTime": "number?",
+  "groups": "string[]?"
+}
+```
+
+---
+
 #### DELETE /api/sites/:id/tokens/:tokenId
+
+删除令牌。
+
+| apiType | 上游路径 | 响应转换 |
+|---------|----------|----------|
+| newapi | `DELETE /api/token/{tokenId}` | 无 |
+| veloera | `DELETE /api/token/{tokenId}` | 无 |
+| voapi | `DELETE /api/keys/{tokenId}` | `transformVoapiDeleteResponse` |
+| donehub | `DELETE /api/token/{tokenId}` | 无 |
+
+---
+
 #### POST /api/sites/:id/tokens/:tokenId/key
+
+获取令牌完整密钥。
+
+| apiType | 上游路径 | 说明 |
+|---------|----------|------|
+| newapi | `POST /api/token/{tokenId}/key` | `transformNewapiTokenKey` — 从 `data.key` 提取，加 `sk-` 前缀 |
+| veloera | `POST /api/token/{tokenId}/key` | `transformNewapiTokenKey` |
+| voapi | — | **返回 400**："当前站点类型不需要单独获取完整令牌" |
+| donehub | `POST /api/token/{tokenId}/key` | 无转换 |
+
+---
+
 #### GET /api/sites/:id/groups
+
+获取分组列表。
+
+| apiType | 上游路径 | 响应转换 |
+|---------|----------|----------|
+| newapi | `/api/user/self/groups` | 无 |
+| veloera | `/api/user/self/groups` | 无 |
+| voapi | `/api/models` | `transformVoapiGroups` — 转为 `{id:{name,desc}}` 映射格式 |
+| donehub | `/api/user_group_map` | 无 |
+
+---
+
 #### GET /api/sites/:id/pricing
+
+获取定价信息。
+
+| apiType | 上游路径 | 额外处理 |
+|---------|----------|----------|
+| newapi | `/api/pricing` | 无 |
+| veloera | `/api/pricing` | 无 |
+| voapi | `/api/models` | 添加 `User-Agent` 和 `Accept` 标头 |
+| donehub | `/api/available_model` | 无 |
+| other | — | **返回 400**："此站点类型不支持pricing接口" |
+
+---
+
 #### POST /api/sites/:id/redeem
+
+兑换码。
+
+| apiType | 上游路径 |
+|---------|----------|
+| newapi | `/api/user/topup` |
+| veloera | `/api/user/topup` |
+| voapi | `/api/user/topup` |
+| donehub | `/api/user/topup` |
+| other | — 不支持 |
 
 ---
 
