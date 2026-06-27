@@ -168,20 +168,20 @@ func (s *SchedulerService) runGlobalCheck(cfg *model.ScheduleConfig) {
 		}
 
 		report := SiteCheckReport{Name: site.Name}
-		result, err := s.checkService.CheckSite(site.ID, true)
+		sr, err := s.checkService.CheckSite(site.ID, true)
 		if err != nil {
 			report.Error = err.Error()
 		} else {
-			report.ModelCount = len(result.Models)
-			if result.CheckInSuccess != nil && *result.CheckInSuccess {
+			report.ModelCount = len(sr.Result.Models)
+			if sr.Result.CheckInSuccess != nil && *sr.Result.CheckInSuccess {
 				report.CheckInOK = true
 			}
-			if result.CheckInMessage != "" {
-				report.CheckInMsg = result.CheckInMessage
+			if sr.Result.CheckInMessage != "" {
+				report.CheckInMsg = sr.Result.CheckInMessage
 			}
-			report.CheckInQuota = result.CheckInQuota
-			report.BillingLimit = result.BillingLimit
-			report.BillingUsage = result.BillingUsage
+			report.CheckInQuota = sr.Result.CheckInQuota
+			report.BillingLimit = sr.Result.BillingLimit
+			report.BillingUsage = sr.Result.BillingUsage
 		}
 		reports = append(reports, report)
 

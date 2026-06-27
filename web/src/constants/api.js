@@ -1,0 +1,13 @@
+export const API = {
+  SITES: '/api/sites',
+  CATEGORIES: '/api/categories',
+  EMAIL_CONFIG: '/api/email-config',
+  SCHEDULE_CONFIG: '/api/schedule-config',
+  AUTH: '/api/auth/login',
+  SITES_BATCH_CHECK: '/api/sites/batch-check',
+  SITES_CHECK_ALL: '/api/sites/check-all',
+  SITES_UNCATEGORIZED: '/api/sites/uncategorized',
+  EMAIL_CONFIG_TEST: '/api/email-config/test',
+  EXPORTS_SITES: '/api/exports/sites',
+  SITES_IMPORT: '/api/sites/import',
+}

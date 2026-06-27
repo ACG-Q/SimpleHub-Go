@@ -80,7 +80,7 @@ func (h *SiteHandler) List(c *gin.Context) {
 	search := c.Query("search")
 	sites, err := h.siteRepo.List(search)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -129,14 +129,14 @@ func (h *SiteHandler) List(c *gin.Context) {
 		}
 		resp[i] = r
 	}
-	c.JSON(http.StatusOK, resp)
+	Data(c, resp)
 }
 
 func (h *SiteHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 	site, err := h.siteRepo.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	token, _ := crypto.Decrypt(site.APIKeyEnc, h.encryptionKey)
@@ -161,19 +161,19 @@ func (h *SiteHandler) Get(c *gin.Context) {
 		BillingAV: billingAV,
 		Type:      site.APIType,
 	}
-	c.JSON(http.StatusOK, resp)
+	Data(c, resp)
 }
 
 func (h *SiteHandler) Create(c *gin.Context) {
 	var req CreateSiteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供必填字段"})
+		Fail(c, http.StatusBadRequest, "请提供必填字段")
 		return
 	}
 
 	apiKeyEnc, err := crypto.Encrypt(req.APIKey, h.encryptionKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "加密失败"})
+		Fail(c, http.StatusInternalServerError, "加密失败")
 		return
 	}
 
@@ -212,7 +212,7 @@ func (h *SiteHandler) Create(c *gin.Context) {
 	}
 
 	if err := h.siteRepo.Create(site); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -227,31 +227,31 @@ func (h *SiteHandler) Create(c *gin.Context) {
 		BillingAV: req.BillingAuthValue,
 		Type:      apiType,
 	}
-	c.JSON(http.StatusCreated, resp)
+	Created(c, resp)
 }
 
 func (h *SiteHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var body map[string]interface{}
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
+		Fail(c, http.StatusBadRequest, "无效的请求数据")
 		return
 	}
 
 	updates := buildUpdates(body, h.encryptionKey)
 	if len(updates) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "没有需要更新的字段"})
+		Fail(c, http.StatusBadRequest, "没有需要更新的字段")
 		return
 	}
 
 	if err := h.siteRepo.Update(id, updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	site, err := h.siteRepo.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -282,7 +282,7 @@ func (h *SiteHandler) Update(c *gin.Context) {
 		BillingAV: billingAV,
 		Type:      site.APIType,
 	}
-	c.JSON(http.StatusOK, resp)
+	Data(c, resp)
 }
 
 func buildUpdates(body map[string]interface{}, encKey string) map[string]interface{} {
@@ -385,29 +385,29 @@ func nonZero(s, fallback string) string {
 func (h *SiteHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.siteRepo.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if h.schedulerService != nil {
 		h.schedulerService.RemoveSiteTask(id)
 		h.schedulerService.ScheduleAll()
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	OK(c)
 }
 
 func (h *SiteHandler) Check(c *gin.Context) {
 	id := c.Param("id")
 	skipNotif := c.Query("skipNotification") == "true"
 
-	result, err := h.checkService.CheckSite(id, skipNotif, true)
+	sr, err := h.checkService.CheckSite(id, skipNotif, true)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "检测失败：" + err.Error()})
+		Fail(c, http.StatusInternalServerError, "检测失败："+err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"ok":      true,
-		"message": "检测成功",
-		"result":  result,
+	Data(c, gin.H{
+		"hasChanges": sr.HasChanges,
+		"diff":       sr.Diff,
+		"result":     sr.Result,
 	})
 }
 
@@ -419,16 +419,16 @@ func (h *SiteHandler) Reorder(c *gin.Context) {
 		} `json:"orders"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
+		Fail(c, http.StatusBadRequest, "无效的请求数据")
 		return
 	}
 	for _, o := range req.Orders {
 		if err := h.siteRepo.Update(o.ID, map[string]interface{}{"sort_order": o.SortOrder}); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			Fail(c, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	OK(c)
 }
 
 func parseModelsJSON(s string) any {
@@ -449,7 +449,7 @@ func (h *SiteHandler) GetSnapshots(c *gin.Context) {
 	}
 	snaps, err := h.snapRepo.List(id, limit)
 	if err != nil {
-		c.JSON(http.StatusOK, []model.ModelSnapshot{})
+		Data(c, []model.ModelSnapshot{})
 		return
 	}
 	type resp struct {
@@ -460,21 +460,21 @@ func (h *SiteHandler) GetSnapshots(c *gin.Context) {
 	for i, s := range snaps {
 		result[i] = resp{ModelSnapshot: s, ModelsJSON: parseModelsJSON(s.ModelsJSON)}
 	}
-	c.JSON(http.StatusOK, result)
+	Data(c, result)
 }
 
 func (h *SiteHandler) GetLatestSnapshot(c *gin.Context) {
 	id := c.Param("id")
 	snap, err := h.snapRepo.GetLatestWithError(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "无快照数据"})
+		Fail(c, http.StatusNotFound, "无快照数据")
 		return
 	}
 	type resp struct {
 		model.ModelSnapshot
 		ModelsJSON any `json:"modelsJson"`
 	}
-	c.JSON(http.StatusOK, resp{ModelSnapshot: *snap, ModelsJSON: parseModelsJSON(snap.ModelsJSON)})
+	Data(c, resp{ModelSnapshot: *snap, ModelsJSON: parseModelsJSON(snap.ModelsJSON)})
 }
 
 func (h *SiteHandler) GetDiffs(c *gin.Context) {
@@ -487,7 +487,7 @@ func (h *SiteHandler) GetDiffs(c *gin.Context) {
 	}
 	diffs, err := h.diffRepo.List(id, limit)
 	if err != nil {
-		c.JSON(http.StatusOK, []model.ModelDiff{})
+		Data(c, []model.ModelDiff{})
 		return
 	}
 	type diffResp struct {
@@ -505,16 +505,17 @@ func (h *SiteHandler) GetDiffs(c *gin.Context) {
 			ChangedJSON: parseModelsJSON(d.ChangedJSON),
 		}
 	}
-	c.JSON(http.StatusOK, result)
+	Data(c, result)
 }
 
 type proxyRequest struct {
 	pathByType      map[string]string
-	skipAuth        bool   // skip Authorization header (e.g., newapi pricing)
+	skipAuth        bool
 	extraHeaders    map[string]string
-	transformRequest func([]byte) []byte // optional request body transform (before sending)
-	transform       func([]byte) []byte // optional response body transform
-	verbose         bool   // log full request details
+	transformRequest func([]byte) []byte
+	transform       func([]byte) []byte
+	verbose         bool
+	wrapResponse    bool
 }
 
 func pickPath(apiType string, pathByType map[string]string) string {
@@ -532,7 +533,7 @@ func (h *SiteHandler) doProxy(c *gin.Context, site *model.Site, pr proxyRequest)
 
 	apiKey, err := crypto.Decrypt(site.APIKeyEnc, h.encryptionKey)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "解密失败"})
+		Fail(c, http.StatusInternalServerError, "解密失败")
 		return
 	}
 
@@ -607,7 +608,7 @@ func (h *SiteHandler) doProxy(c *gin.Context, site *model.Site, pr proxyRequest)
 			Str("upstream_url", upstreamURL).
 			Err(err).
 			Msg("proxy upstream request failed")
-		c.JSON(502, gin.H{"error": "上游请求失败: " + err.Error()})
+		Fail(c, http.StatusBadGateway, "上游请求失败: "+err.Error())
 		return
 	}
 	defer resp.Body.Close()
@@ -630,6 +631,14 @@ func (h *SiteHandler) doProxy(c *gin.Context, site *model.Site, pr proxyRequest)
 
 	if pr.transform != nil {
 		body = pr.transform(body)
+	}
+
+	if pr.wrapResponse {
+		var v interface{}
+		if json.Unmarshal(body, &v) == nil {
+			Data(c, v)
+			return
+		}
 	}
 
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
@@ -701,7 +710,7 @@ func transformNewapiTokens(body []byte) []byte {
 		}
 	}
 
-	out, _ := json.Marshal(gin.H{"success": true, "data": items})
+	out, _ := json.Marshal(gin.H{"ok": true, "data": items})
 	return out
 }
 
@@ -811,7 +820,7 @@ func transformVoapiTokens(body []byte) []byte {
 		})
 	}
 
-	out, _ := json.Marshal(gin.H{"success": true, "data": items})
+	out, _ := json.Marshal(gin.H{"ok": true, "data": items})
 	return out
 }
 
@@ -868,10 +877,10 @@ func transformVoapiCreateResponse(body []byte) []byte {
 		return body
 	}
 	if raw.Code == 0 {
-		out, _ := json.Marshal(gin.H{"success": true, "message": "创建成功"})
+		out, _ := json.Marshal(gin.H{"ok": true, "message": "创建成功"})
 		return out
 	}
-	out, _ := json.Marshal(gin.H{"success": false, "error": raw.Message})
+	out, _ := json.Marshal(gin.H{"ok": false, "error": raw.Message})
 	return out
 }
 
@@ -934,10 +943,10 @@ func transformVoapiUpdateResponse(body []byte) []byte {
 		return body
 	}
 	if raw.Code == 0 {
-		out, _ := json.Marshal(gin.H{"success": true, "message": "更新成功"})
+		out, _ := json.Marshal(gin.H{"ok": true, "message": "更新成功"})
 		return out
 	}
-	out, _ := json.Marshal(gin.H{"success": false, "error": raw.Message})
+	out, _ := json.Marshal(gin.H{"ok": false, "error": raw.Message})
 	return out
 }
 
@@ -950,10 +959,10 @@ func transformVoapiDeleteResponse(body []byte) []byte {
 		return body
 	}
 	if raw.Code == 0 {
-		out, _ := json.Marshal(gin.H{"success": true, "message": "删除成功"})
+		out, _ := json.Marshal(gin.H{"ok": true, "message": "删除成功"})
 		return out
 	}
-	out, _ := json.Marshal(gin.H{"success": false, "error": raw.Message})
+	out, _ := json.Marshal(gin.H{"ok": false, "error": raw.Message})
 	return out
 }
 
@@ -1005,7 +1014,7 @@ func normalizeProxyURL(url string) string {
 func (h *SiteHandler) ListTokens(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	pr := proxyRequest{
@@ -1015,6 +1024,7 @@ func (h *SiteHandler) ListTokens(c *gin.Context) {
 			"donehub": "/api/token/",
 			"voapi":   "/api/keys",
 		},
+		wrapResponse: true,
 	}
 	if site.APIType == "voapi" {
 		pr.transform = transformVoapiTokens
@@ -1027,7 +1037,7 @@ func (h *SiteHandler) ListTokens(c *gin.Context) {
 func (h *SiteHandler) CreateToken(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	pr := proxyRequest{
@@ -1037,6 +1047,7 @@ func (h *SiteHandler) CreateToken(c *gin.Context) {
 			"donehub": "/api/token/",
 			"voapi":   "/api/keys",
 		},
+		wrapResponse: true,
 	}
 	if site.APIType == "voapi" {
 		pr.transformRequest = transformVoapiCreateRequest
@@ -1050,7 +1061,7 @@ func (h *SiteHandler) CreateToken(c *gin.Context) {
 func (h *SiteHandler) UpdateToken(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 
@@ -1060,14 +1071,14 @@ func (h *SiteHandler) UpdateToken(c *gin.Context) {
 			ID string `json:"id"`
 		}
 		if err := json.Unmarshal(bodyBytes, &body); err != nil || body.ID == "" {
-			c.JSON(400, gin.H{"error": "缺少令牌ID"})
+			Fail(c, http.StatusBadRequest, "缺少令牌ID")
 			return
 		}
 		c.Request.Body = io.NopCloser(bytes.NewReader(transformVoapiUpdateRequest(bodyBytes)))
 		upstreamURL := strings.TrimRight(site.BaseURL, "/") + "/api/keys/" + body.ID
 		apiKey, err := crypto.Decrypt(site.APIKeyEnc, h.encryptionKey)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "解密失败"})
+			Fail(c, http.StatusInternalServerError, "解密失败")
 			return
 		}
 		req, _ := http.NewRequest("PUT", upstreamURL, c.Request.Body)
@@ -1076,7 +1087,7 @@ func (h *SiteHandler) UpdateToken(c *gin.Context) {
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			c.JSON(502, gin.H{"error": "上游请求失败: " + err.Error()})
+			Fail(c, http.StatusBadGateway, "上游请求失败: "+err.Error())
 			return
 		}
 		defer resp.Body.Close()
@@ -1091,13 +1102,14 @@ func (h *SiteHandler) UpdateToken(c *gin.Context) {
 			"veloera": "/api/token/",
 			"donehub": "/api/token/",
 		},
+		wrapResponse: true,
 	})
 }
 
 func (h *SiteHandler) DeleteToken(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	tokenID := c.Param("tokenId")
@@ -1108,6 +1120,7 @@ func (h *SiteHandler) DeleteToken(c *gin.Context) {
 			"donehub": "/api/token/" + tokenID,
 			"voapi":   "/api/keys/" + tokenID,
 		},
+		wrapResponse: true,
 	}
 	if site.APIType == "voapi" {
 		pr.transform = transformVoapiDeleteResponse
@@ -1118,11 +1131,11 @@ func (h *SiteHandler) DeleteToken(c *gin.Context) {
 func (h *SiteHandler) GetTokenKey(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	if site.APIType == "voapi" {
-		c.JSON(400, gin.H{"error": "当前站点类型不需要单独获取完整令牌"})
+		Fail(c, http.StatusBadRequest, "当前站点类型不需要单独获取完整令牌")
 		return
 	}
 
@@ -1140,13 +1153,14 @@ func (h *SiteHandler) GetTokenKey(c *gin.Context) {
 			"Cache-Control": "no-store",
 			"Accept":        "application/json, text/plain, */*",
 		},
+		wrapResponse: true,
 	})
 }
 
 func (h *SiteHandler) ListGroups(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	pr := proxyRequest{
@@ -1156,6 +1170,7 @@ func (h *SiteHandler) ListGroups(c *gin.Context) {
 			"donehub": "/api/user_group_map",
 			"voapi":   "/api/models",
 		},
+		wrapResponse: true,
 	}
 	if site.APIType == "voapi" {
 		pr.transform = transformVoapiGroups
@@ -1166,12 +1181,12 @@ func (h *SiteHandler) ListGroups(c *gin.Context) {
 func (h *SiteHandler) GetPricing(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 
 	if site.APIType != "newapi" && site.APIType != "veloera" && site.APIType != "donehub" && site.APIType != "voapi" {
-		c.JSON(400, gin.H{"error": "此站点类型不支持pricing接口"})
+		Fail(c, http.StatusBadRequest, "此站点类型不支持pricing接口")
 		return
 	}
 
@@ -1191,13 +1206,14 @@ func (h *SiteHandler) GetPricing(c *gin.Context) {
 		skipAuth:     false,
 		extraHeaders: extraHeaders,
 		verbose:      true,
+		wrapResponse: true,
 	})
 }
 
 func (h *SiteHandler) Redeem(c *gin.Context) {
 	site, err := h.siteRepo.GetByID(c.Param("id"))
 	if err != nil {
-		c.JSON(404, gin.H{"error": "站点不存在"})
+		Fail(c, http.StatusNotFound, "站点不存在")
 		return
 	}
 	h.doProxy(c, site, proxyRequest{
@@ -1207,6 +1223,7 @@ func (h *SiteHandler) Redeem(c *gin.Context) {
 			"donehub": "/api/user/topup",
 			"voapi":   "/api/user/topup",
 		},
+		wrapResponse: true,
 	})
 }
 

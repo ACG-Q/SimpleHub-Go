@@ -1,181 +1,126 @@
-import { Layout, Menu, message, Modal } from 'antd'
+import { useRef } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { ApiOutlined, LogoutOutlined, AppstoreOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
-import { useState, useRef } from 'react'
+import { useAuth } from '../api/useAuth.jsx'
+import { ModalHost } from '../components/ui/Modal'
+import { showToast } from '../api/client'
+import { useExportSites, useImportSites } from '../hooks/useApi'
 
 export default function App() {
-  const nav = useNavigate()
-  const loc = useLocation()
-  const fileInputRef = useRef(null)
-  const [importing, setImporting] = useState(false)
-  
-  const logout = () => { localStorage.removeItem('token'); nav('/login') }
-  
-  const authHeaders = () => {
-    const token = localStorage.getItem('token')
-    return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-  }
-  
-  // 导出站点
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const fileRef = useRef(null)
+
+  const exportSitesMutation = useExportSites()
+  const importSitesMutation = useImportSites()
+
   const handleExport = async () => {
     try {
-      const res = await fetch('/api/exports/sites', {
-        headers: authHeaders()
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || '导出失败')
-      }
-      const data = await res.json()
-      
-      // 创建下载
+      const data = await exportSitesMutation.mutateAsync()
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-      const url = window.URL.createObjectURL(blob)
+      const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
-      a.download = `sites-export-${new Date().toISOString().slice(0, 10)}.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
-      
-      message.success(`成功导出 ${data.sites?.length || 0} 个站点`)
+      a.href = url; a.download = `sites-export-${Date.now()}.json`; a.click()
+      URL.revokeObjectURL(url)
+      showToast('导出成功')
     } catch (e) {
-      message.error(e.message || '导出站点失败')
+      showToast(e.message || '导出失败', 'error')
     }
   }
-  
-  // 导入站点
-  const handleImport = () => {
-    fileInputRef.current?.click()
-  }
-  
-  const handleFileChange = async (e) => {
+
+  const handleImport = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    
     try {
-      setImporting(true)
       const text = await file.text()
       const data = JSON.parse(text)
-      
-      if (!data.sites || !Array.isArray(data.sites)) {
-        throw new Error('无效的导入文件格式')
-      }
-      
-      // 确认导入
-      Modal.confirm({
-        title: '确认导入站点',
-        content: `将导入 ${data.sites.length} 个站点，是否继续？`,
-        okText: '确认导入',
-        cancelText: '取消',
-        onOk: async () => {
-          const res = await fetch('/api/sites/import', {
-            method: 'POST',
-            headers: authHeaders(),
-            body: JSON.stringify(data)
-          })
-          
-          if (!res.ok) {
-            const errData = await res.json().catch(() => ({}))
-            throw new Error(errData.error || '导入失败')
-          }
-          
-          const result = await res.json()
-          message.success(`成功导入 ${result.imported || 0} 个站点`)
-          
-          // 刷新页面
-          if (loc.pathname === '/') {
-            window.location.reload()
-          }
-        }
-      })
+      if (!window.confirm(`确定导入 ${data.sites?.length || 0} 个站点？`)) return
+      await importSitesMutation.mutateAsync(data)
+      showToast('导入成功')
+      window.location.reload()
     } catch (e) {
-      message.error(e.message || '导入站点失败')
-    } finally {
-      setImporting(false)
-      e.target.value = '' // 重置文件输入
+      showToast(e.message || '导入失败', 'error')
     }
+    e.target.value = ''
   }
-  
+
+  const isActive = (path) => location.pathname === path
+
+  const navItems = [
+    { path: '/', label: '站点管理', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
+  ]
+
   return (
-    <Layout style={{ minHeight: '100vh', background: 'var(--app-bg-gradient)' }}>
-      <Layout.Header style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        background: 'rgba(255, 255, 255, 0.95)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        padding: '0 32px',
-        height: 70
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 12,
-          fontSize: 20,
-          fontWeight: 700,
-          background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
-        }}>
-          <ApiOutlined style={{ fontSize: 28, color: '#1890ff' }} />
-          API 聚合监控管理系统
+    <ModalHost>
+    <div className="min-h-screen">
+      <nav className="fixed top-3 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-6xl z-50 bg-white/65 backdrop-blur-xl border border-white/80 rounded-2xl h-14 flex items-center justify-between px-5 shadow-sm">
+        <div className="flex items-center gap-8">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 font-bold text-base text-text"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="url(#primaryGrad)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <defs><linearGradient id="primaryGrad" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#2563EB"/><stop offset="1" stopColor="#3B82F6"/></linearGradient></defs>
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            <span className="bg-gradient-to-r from-primary to-primary-light bg-clip-text text-transparent">SimpleHub</span>
+          </button>
+          <div className="hidden md:flex items-center gap-1">
+            {navItems.map(item => (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isActive(item.path) ? 'bg-primary-bg text-primary' : 'text-text-secondary hover:bg-primary-bg/50 hover:text-primary'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <Menu 
-          mode="horizontal" 
-          selectedKeys={[loc.pathname.startsWith('/sites') ? 'sites' : 'home']}
-          style={{ 
-            border: 'none',
-            background: 'transparent',
-            fontSize: 16,
-            fontWeight: 500
-          }}
-          items={[
-            {
-              key: 'sites',
-              icon: <AppstoreOutlined />,
-              label: '站点管理',
-              onClick: () => nav('/')
-            },
-            {
-              key: 'export',
-              icon: <DownloadOutlined />,
-              label: '导出站点',
-              onClick: handleExport
-            },
-            {
-              key: 'import',
-              icon: <UploadOutlined />,
-              label: '导入站点',
-              onClick: handleImport,
-              disabled: importing
-            },
-            {
-              key: 'logout',
-              icon: <LogoutOutlined />,
-              label: '退出登录',
-              onClick: logout,
-              danger: true
-            }
-          ]}
-        />
-      </Layout.Header>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
-      <Layout.Content style={{ 
-        padding: '32px 48px',
-        maxWidth: 1400,
-        width: '100%',
-        margin: '0 auto'
-      }}>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExport} className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-text-secondary hover:bg-white/80 hover:text-primary border border-border transition-all duration-200 cursor-pointer">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            导出
+          </button>
+          <button onClick={() => fileRef.current?.click()} className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-text-secondary hover:bg-white/80 hover:text-primary border border-border transition-all duration-200 cursor-pointer">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            导入
+          </button>
+          <input ref={fileRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
+          <button onClick={() => { logout(); navigate('/') }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-text-secondary hover:bg-danger-bg hover:text-danger transition-all duration-200 cursor-pointer">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span className="hidden sm:inline">退出</span>
+          </button>
+        </div>
+      </nav>
+
+      <main className="max-w-6xl mx-auto px-4 pt-20 pb-8">
         <Outlet />
-      </Layout.Content>
-    </Layout>
+      </main>
+
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/85 backdrop-blur-xl border-t border-border z-50 pb-safe">
+        <div className="flex justify-around py-1.5">
+          <button onClick={() => navigate('/')} className={`flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isActive('/') ? 'text-primary' : 'text-text-secondary'}`}>
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            站点
+          </button>
+          <button onClick={handleExport} className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary transition-all duration-200">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            导出
+          </button>
+          <button onClick={() => fileRef.current?.click()} className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary transition-all duration-200">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            导入
+          </button>
+          <button onClick={() => { logout(); navigate('/') }} className="flex flex-col items-center gap-0.5 px-4 py-1.5 rounded-lg text-xs font-medium text-text-secondary transition-all duration-200">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            退出
+          </button>
+        </div>
+      </nav>
+    </div>
+    </ModalHost>
   )
 }

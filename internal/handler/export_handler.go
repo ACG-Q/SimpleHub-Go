@@ -53,7 +53,7 @@ type exportSite struct {
 func (h *ExportHandler) Export(c *gin.Context) {
 	sites, err := h.siteRepo.List("")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -122,7 +122,7 @@ func (h *ExportHandler) Export(c *gin.Context) {
 		"sites":      exportSites,
 	}
 
-	c.JSON(http.StatusOK, result)
+	Data(c, result)
 }
 
 type importSite struct {
@@ -161,12 +161,12 @@ func (h *ExportHandler) Import(c *gin.Context) {
 		Sites []importSite `json:"sites"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的导入数据"})
+		Fail(c, http.StatusBadRequest, "无效的导入数据")
 		return
 	}
 
 	if len(req.Sites) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "没有需要导入的站点"})
+		Fail(c, http.StatusBadRequest, "没有需要导入的站点")
 		return
 	}
 
@@ -286,12 +286,11 @@ func (h *ExportHandler) Import(c *gin.Context) {
 	}
 
 	resp := gin.H{
-		"success":  true,
 		"imported": imported,
 		"total":    total,
 	}
 	if len(errors) > 0 {
 		resp["errors"] = errors
 	}
-	c.JSON(http.StatusOK, resp)
+	Data(c, resp)
 }

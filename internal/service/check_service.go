@@ -41,7 +41,13 @@ func NewCheckService(
 	}
 }
 
-func (s *CheckService) CheckSite(siteID string, skipNotification bool, isManual ...bool) (*checker.CheckResult, error) {
+type CheckSiteResult struct {
+	Result     *checker.CheckResult
+	HasChanges bool
+	Diff       *DiffResult
+}
+
+func (s *CheckService) CheckSite(siteID string, skipNotification bool, isManual ...bool) (*CheckSiteResult, error) {
 	manual := false
 	if len(isManual) > 0 {
 		manual = isManual[0]
@@ -136,8 +142,9 @@ func (s *CheckService) CheckSite(siteID string, skipNotification bool, isManual 
 	}
 
 	hasChanges := prevSnap == nil || prevSnap.Hash != snapHash
+	var diff DiffResult
 	if hasChanges && prevSnap != nil {
-		diff := computeDiff(prevSnap, result.Models)
+		diff = computeDiff(prevSnap, result.Models)
 		diffRec := &model.ModelDiff{
 			ID:             newID(),
 			SiteID:         siteID,
@@ -161,7 +168,7 @@ func (s *CheckService) CheckSite(siteID string, skipNotification bool, isManual 
 		"last_checked_at": time.Now(),
 	})
 
-	return result, nil
+	return &CheckSiteResult{Result: result, HasChanges: hasChanges && prevSnap != nil, Diff: &diff}, nil
 }
 
 type DiffResult struct {

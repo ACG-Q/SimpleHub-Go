@@ -82,7 +82,10 @@ func (s *SetupService) Reset() (*InitResult, error) {
 	entry := generateHex(8)
 	port := generatePort()
 	jwtSecret := generateHex(64)
-	encKey := generateHex(32)
+	encKey := model.GetConfig(s.db, "encryption_key")
+	if encKey == "" {
+		encKey = generateHex(32)
+	}
 
 	model.SetConfig(s.db, "port", fmt.Sprintf("%d", port))
 	model.SetConfig(s.db, "admin_entry", entry)

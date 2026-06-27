@@ -28,10 +28,10 @@ func NewCategoryHandler(catRepo *repository.CategoryRepository, checkService *se
 func (h *CategoryHandler) List(c *gin.Context) {
 	categories, err := h.catRepo.List()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, categories)
+	Data(c, categories)
 }
 
 func (h *CategoryHandler) Create(c *gin.Context) {
@@ -41,7 +41,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		Timezone     string  `json:"timezone"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "请提供分类名称"})
+		Fail(c, http.StatusBadRequest, "请提供分类名称")
 		return
 	}
 
@@ -57,54 +57,54 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		Timezone:     timezone,
 	}
 	if err := h.catRepo.Create(cat); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if h.schedulerService != nil {
 		h.schedulerService.ScheduleAll()
 	}
-	c.JSON(http.StatusCreated, cat)
+	Created(c, cat)
 }
 
 func (h *CategoryHandler) Update(c *gin.Context) {
 	id := c.Param("id")
 	var updates map[string]interface{}
 	if err := c.ShouldBindJSON(&updates); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求数据"})
+		Fail(c, http.StatusBadRequest, "无效的请求数据")
 		return
 	}
 	if err := h.catRepo.Update(id, updates); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	cat, err := h.catRepo.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if h.schedulerService != nil {
 		h.schedulerService.ScheduleAll()
 	}
-	c.JSON(http.StatusOK, cat)
+	Data(c, cat)
 }
 
 func (h *CategoryHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
 	if err := h.catRepo.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if h.schedulerService != nil {
 		h.schedulerService.ScheduleAll()
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	OK(c)
 }
 
 func (h *CategoryHandler) Check(c *gin.Context) {
 	id := c.Param("id")
 	cat, err := h.catRepo.GetByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "分类不存在"})
+		Fail(c, http.StatusNotFound, "分类不存在")
 		return
 	}
 
@@ -126,23 +126,20 @@ func (h *CategoryHandler) Check(c *gin.Context) {
 		if site.Pinned || site.ExcludeFromBatch {
 			continue
 		}
-		result, err := h.checkService.CheckSite(site.ID, skipNotif)
+		sr, err := h.checkService.CheckSite(site.ID, skipNotif)
 		if err != nil {
 			failures = append(failures, failInfo{SiteName: site.Name, Error: err.Error()})
-		} else if result.ErrorMessage != "" {
-			failures = append(failures, failInfo{SiteName: site.Name, Error: result.ErrorMessage})
-		} else if result.Hash != "" {
-			changes = append(changes, changeInfo{SiteName: site.Name, Diff: result.Hash})
+		} else if sr.Result.ErrorMessage != "" {
+			failures = append(failures, failInfo{SiteName: site.Name, Error: sr.Result.ErrorMessage})
+		} else if sr.Result.Hash != "" {
+			changes = append(changes, changeInfo{SiteName: site.Name, Diff: sr.Result.Hash})
 		}
 		time.Sleep(5 * time.Second)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"ok": true,
-		"results": gin.H{
-			"changes":    changes,
-			"failures":   failures,
-			"totalSites": len(cat.Sites),
-		},
+	Data(c, gin.H{
+		"changes":    changes,
+		"failures":   failures,
+		"totalSites": len(cat.Sites),
 	})
 }
