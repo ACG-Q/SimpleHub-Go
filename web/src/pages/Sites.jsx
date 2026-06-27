@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef, startTransition } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { showToast } from '../api/client'
 import { Button } from '../components/ui/Button'
@@ -9,28 +10,25 @@ import { cronToHourMin } from './SitesList'
 import SitesList from './SitesList'
 import { Modal } from '../components/ui/Modal'
 import {
-  useSites, useSite, useCategories, useEmailConfig, useScheduleConfig,
+  useSites, useSite, useCategories,
   useCreateSite, useUpdateSite, useDeleteSite, useCheckSite,
   useBatchCheckCategory,
   useUpdateSortOrder as useUpdateSortOrderMutation, useUpdateSchedule,
   useCreateCategory, useUpdateCategory, useDeleteCategory,
-  useSaveEmailConfig, useTestEmail, useSaveScheduleConfig,
-  useTriggerGlobalCheck, useDeleteUncategorized,
   useLatestSnapshot,
 } from '../hooks/useApi'
 import {
-  SiteEditModal, TimeModal, DebugModal, EmailConfigModal,
-  ScheduleConfigModal, BatchResultModal, CategoryModal, CategoryManageModal,
+  SiteEditModal, TimeModal, DebugModal,
+  BatchResultModal, CategoryModal, CategoryManageModal,
 } from './SitesModals'
 import SitesBatchCheck from './SitesBatchCheck'
 
 export default function Sites() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [searchKeyword, setSearchKeyword] = useState('')
   const { data: list = [] } = useSites(searchKeyword)
   const { data: categories = [] } = useCategories()
-  const { data: emailConfigData } = useEmailConfig()
-  const scheduleQuery = useScheduleConfig()
 
   const [open, setOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
@@ -42,14 +40,6 @@ export default function Sites() {
   const [debugOpen, setDebugOpen] = useState(false)
   const [debugData, setDebugData] = useState(null)
   const [debugLoading, setDebugLoading] = useState(false)
-  const [emailConfigOpen, setEmailConfigOpen] = useState(false)
-  const [emailApiKey, setEmailApiKey] = useState('')
-  const [emailEmails, setEmailEmails] = useState([])
-  const [scheduleOpen, setScheduleOpen] = useState(false)
-  const [schEnable, setSchEnable] = useState(false)
-  const [schScheduleTime, setSchScheduleTime] = useState('09:00')
-  const [schInterval, setSchInterval] = useState('30')
-  const [schOverride, setSchOverride] = useState(false)
   const [batchChecking, setBatchChecking] = useState(false)
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentSite: '' })
   const [batchResultOpen, setBatchResultOpen] = useState(false)
@@ -88,12 +78,6 @@ export default function Sites() {
   const createCategory = useCreateCategory()
   const updateCategory = useUpdateCategory()
   const deleteCategoryMutation = useDeleteCategory()
-  const saveEmailConfigMutation = useSaveEmailConfig()
-  const testEmailMutation = useTestEmail()
-  const saveScheduleConfigMutation = useSaveScheduleConfig()
-  const triggerGlobalCheck = useTriggerGlobalCheck()
-  const deleteUncategorizedMutation = useDeleteUncategorized()
-
   useEffect(() => { listRef.current = list }, [list])
   useEffect(() => { searchRef.current = searchKeyword }, [searchKeyword])
   useEffect(() => {
@@ -109,16 +93,6 @@ export default function Sites() {
       requestAnimationFrame(() => { window.scrollTo(0, y); sessionStorage.removeItem('sitesScrollPosition') })
     }
   }, [])
-
-  useEffect(() => {
-    if (scheduleQuery.data?.config) {
-      const c = scheduleQuery.data.config
-      setSchEnable(c.enabled)
-      setSchScheduleTime(`${String(c.hour ?? 9).padStart(2, '0')}:${String(c.minute ?? 0).padStart(2, '0')}`)
-      setSchInterval(String(c.interval ?? 30))
-      setSchOverride(c.overrideIndividual ?? false)
-    }
-  }, [scheduleQuery.data])
 
   useEffect(() => {
     if (categories.length > 0) {
@@ -407,49 +381,6 @@ export default function Sites() {
     showToast(changes.length === 0 && failures.length === 0 ? '检测完成，所有站点无变更' : '检测完成！')
   }
 
-  const saveEmailConfig = async () => {
-    try {
-      await saveEmailConfigMutation.mutateAsync({ resendApiKey: emailApiKey, notifyEmails: emailEmails.join(','), enabled: true })
-      setEmailConfigOpen(false); setEmailApiKey(''); setEmailEmails([])
-      showToast('邮件通知配置成功')
-    } catch (e) { showToast(e.message || '保存失败', 'error') }
-  }
-
-  const testEmail = async () => {
-    try {
-      await testEmailMutation.mutateAsync({ resendApiKey: emailApiKey, notifyEmails: emailEmails.join(',') })
-      showToast('测试邮件已发送')
-    } catch (e) { showToast(e.message || '发送失败', 'error') }
-  }
-
-  const saveScheduleConfig = async () => {
-    try {
-      const [h = '9', m = '0'] = (schScheduleTime || '').split(':')
-      await saveScheduleConfigMutation.mutateAsync({
-        enabled: schEnable, hour: Number(h) || 9, minute: Number(m) || 0,
-        interval: Number(schInterval) || 30, overrideIndividual: schOverride
-      })
-      setScheduleOpen(false); showToast('定时配置保存成功')
-    } catch (e) { showToast(e.message || '保存失败', 'error') }
-  }
-
-  const triggerSchedule = async () => {
-    try {
-      await triggerGlobalCheck.mutateAsync()
-      showToast('全局检测已触发')
-    } catch (e) { showToast(e.message || '触发失败', 'error') }
-  }
-
-  const deleteUncategorized = async () => {
-    const uSites = list.filter(s => !s.categoryId && !s.pinned)
-    if (!uSites.length) { showToast('没有未分类站点', 'info'); return }
-    const results = await Promise.allSettled(uSites.map(s => deleteSite.mutateAsync(s.id)))
-    const ok = uSites.filter((_, i) => results[i]?.status === 'fulfilled').map(s => s.id)
-    const fail = results.length - ok.length
-    qc.invalidateQueries({ queryKey: ['sites'] })
-    showToast(fail === 0 ? `已成功删除 ${ok.length} 个未分类站点` : `删除完成：成功 ${ok.length} 个，失败 ${fail} 个`)
-  }
-
   const updateField = (key, val) => setFormData(prev => ({ ...prev, [key]: val }))
 
   const openTimeModal = useCallback((site) => {
@@ -469,7 +400,7 @@ export default function Sites() {
         <div><h1 className="text-2xl font-bold tracking-tight">站点管理</h1><p className="text-sm text-text-secondary mt-0.5">管理和监控所有 API 中继站点</p></div>
         <div className="flex items-center gap-2 flex-wrap">
           <SearchBox value={searchKeyword} onChange={e => handleSearch(e.target.value)} placeholder="搜索站点..." className="w-44" />
-          {!isMobile && <><Button variant="ghost" size="sm" onClick={onCheckAll} disabled={batchChecking}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>一键检测</Button>{hasLastResult && <Button variant="ghost" size="sm" onClick={loadLastBatchResult}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>查看结果</Button>}<Button variant="ghost" size="sm" onClick={() => { setEmailApiKey(''); setEmailEmails((emailConfigData?.notifyEmails || '').split(',').map(s => s.trim()).filter(Boolean)); setEmailConfigOpen(true) }}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>邮件通知</Button><Button variant="ghost" size="sm" onClick={() => { loadScheduleConfig(); setScheduleOpen(true) }}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>定时检测</Button><Button variant="ghost" size="sm" onClick={triggerSchedule}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>立即执行</Button></>}
+          {!isMobile && <><Button variant="ghost" size="sm" onClick={onCheckAll} disabled={batchChecking}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>一键检测</Button>{hasLastResult && <Button variant="ghost" size="sm" onClick={loadLastBatchResult}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>查看结果</Button>}<Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>邮件通知</Button><Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>定时检测</Button></>}
           <Button variant="primary" size="sm" onClick={() => { setEditMode(false); setFormData({apiType: 'newapi'}); setBillingExpanded(false); setOpen(true) }}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增站点</Button>
         </div>
       </div>
@@ -530,25 +461,6 @@ export default function Sites() {
       <DebugModal
         open={debugOpen} debugData={debugData} debugLoading={debugLoading}
         onClose={() => { setDebugOpen(false); setDebugData(null) }}
-      />
-
-      <EmailConfigModal
-        open={emailConfigOpen} emailApiKey={emailApiKey} emailEmails={emailEmails}
-        emailConfigData={emailConfigData}
-        onClose={() => setEmailConfigOpen(false)}
-        saveEmailConfig={saveEmailConfig}
-        testEmail={testEmail}
-        setEmailApiKey={setEmailApiKey}
-        setEmailEmails={setEmailEmails}
-      />
-
-      <ScheduleConfigModal
-        open={scheduleOpen} schEnable={schEnable} schScheduleTime={schScheduleTime}
-        schInterval={schInterval} schOverride={schOverride}
-        onClose={() => setScheduleOpen(false)}
-        saveScheduleConfig={saveScheduleConfig}
-        setSchEnable={setSchEnable} setSchScheduleTime={setSchScheduleTime}
-        setSchInterval={setSchInterval} setSchOverride={setSchOverride}
       />
 
       <BatchResultModal

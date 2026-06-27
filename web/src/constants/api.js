@@ -10,4 +10,5 @@ export const API = {
   EMAIL_CONFIG_TEST: '/api/email-config/test',
   EXPORTS_SITES: '/api/exports/sites',
   SITES_IMPORT: '/api/sites/import',
+  DASHBOARD_STATS: '/api/dashboard/stats',
 }

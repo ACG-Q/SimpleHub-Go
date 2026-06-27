@@ -18,6 +18,7 @@ func Setup(cfg *config.Config, authService *service.AuthService,
 	emailHandler *handler.EmailHandler,
 	scheduleHandler *handler.ScheduleHandler,
 	exportHandler *handler.ExportHandler,
+	dashboardHandler *handler.DashboardHandler,
 	distFS http.FileSystem) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
@@ -57,6 +58,8 @@ func Setup(cfg *config.Config, authService *service.AuthService,
 		api.POST("/categories/:id/check", catHandler.Check)
 
 		api.GET("/exports/sites", exportHandler.Export)
+
+		api.GET("/dashboard/stats", dashboardHandler.Stats)
 
 		api.GET("/sites/:id/tokens", siteHandler.ListTokens)
 		api.POST("/sites/:id/tokens", siteHandler.CreateToken)

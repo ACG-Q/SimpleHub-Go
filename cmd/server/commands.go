@@ -142,12 +142,14 @@ func startServer(exeDir string) {
 	emailHandler := handler.NewEmailHandler(emailRepo, cfg.EncryptionKey, notifService)
 	scheduleHandler := handler.NewScheduleHandler(schedRepo, schedulerService)
 	exportHandler := handler.NewExportHandler(siteRepo, catRepo, cfg.EncryptionKey)
+	dashRepo := repository.NewDashboardRepository(db)
+	dashboardHandler := handler.NewDashboardHandler(dashRepo)
 
 	schedulerService.ScheduleAll()
 	defer schedulerService.Stop()
 
 	distFS := getDistFS()
-	r := router.Setup(cfg, authService, authHandler, siteHandler, catHandler, emailHandler, scheduleHandler, exportHandler, distFS)
+	r := router.Setup(cfg, authService, authHandler, siteHandler, catHandler, emailHandler, scheduleHandler, exportHandler, dashboardHandler, distFS)
 
 	srv := &http.Server{
 		Addr:    ":" + itoa(cfg.Port),

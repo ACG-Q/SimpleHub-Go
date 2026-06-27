@@ -286,6 +286,13 @@ export function useRevealTokenKey(siteId) {
   })
 }
 
+export function useDashboardStats() {
+  return useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => api.get(API.DASHBOARD_STATS),
+  })
+}
+
 export function useRedeemCode(siteId) {
   return useMutation({
     mutationFn: (key) => api.post(`/api/sites/${siteId}/redeem`, { key }),

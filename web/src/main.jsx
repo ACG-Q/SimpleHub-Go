@@ -11,6 +11,8 @@ const App = React.lazy(() => import('./pages/App'))
 const Login = React.lazy(() => import('./pages/Login'))
 const Sites = React.lazy(() => import('./pages/Sites'))
 const SiteDetail = React.lazy(() => import('./pages/SiteDetail'))
+const Dashboard = React.lazy(() => import('./pages/Dashboard'))
+const Settings = React.lazy(() => import('./pages/Settings'))
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000, refetchOnWindowFocus: false } },
@@ -39,6 +41,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Routes>
                 <Route path="/" element={<RequireAuth><App /></RequireAuth>}>
                   <Route index element={<ErrorBoundary key="sites"><Sites /></ErrorBoundary>} />
+                  <Route path="dashboard" element={<ErrorBoundary key="dashboard"><Dashboard /></ErrorBoundary>} />
+                  <Route path="settings" element={<ErrorBoundary key="settings"><Settings /></ErrorBoundary>} />
                   <Route path="sites/:id" element={<ErrorBoundary key="detail"><SiteDetail /></ErrorBoundary>} />
                 </Route>
                 <Route path="/:entry" element={<Login />} />
