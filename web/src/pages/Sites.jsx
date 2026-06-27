@@ -381,6 +381,13 @@ export default function Sites() {
     showToast(changes.length === 0 && failures.length === 0 ? '检测完成，所有站点无变更' : '检测完成！')
   }
 
+  const handleAddSite = () => {
+    setEditMode(false)
+    setFormData({apiType: 'newapi'})
+    setBillingExpanded(false)
+    setOpen(true)
+  }
+
   const updateField = (key, val) => setFormData(prev => ({ ...prev, [key]: val }))
 
   const openTimeModal = useCallback((site) => {
@@ -400,8 +407,9 @@ export default function Sites() {
         <div><h1 className="text-2xl font-bold tracking-tight">站点管理</h1><p className="text-sm text-text-secondary mt-0.5">管理和监控所有 API 中继站点</p></div>
         <div className="flex items-center gap-2 flex-wrap">
           <SearchBox value={searchKeyword} onChange={e => handleSearch(e.target.value)} placeholder="搜索站点..." className="w-44" />
-          {!isMobile && <><Button variant="ghost" size="sm" onClick={onCheckAll} disabled={batchChecking}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>一键检测</Button>{hasLastResult && <Button variant="ghost" size="sm" onClick={loadLastBatchResult}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>查看结果</Button>}<Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>邮件通知</Button><Button variant="ghost" size="sm" onClick={() => navigate('/settings')}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>定时检测</Button></>}
-          <Button variant="primary" size="sm" onClick={() => { setEditMode(false); setFormData({apiType: 'newapi'}); setBillingExpanded(false); setOpen(true) }}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增站点</Button>
+          {!isMobile && <Button variant="ghost" size="sm" onClick={onCheckAll} disabled={batchChecking}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>一键检测</Button>}
+          {!isMobile && hasLastResult && <Button variant="ghost" size="sm" onClick={loadLastBatchResult}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>查看结果</Button>}
+          <Button variant="primary" size="sm" onClick={handleAddSite}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新增站点</Button>
         </div>
       </div>
 

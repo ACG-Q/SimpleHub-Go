@@ -36,6 +36,12 @@ export default function Settings() {
   const [schOverride, setSchOverride] = useState(false)
 
   useEffect(() => {
+    if (emailConfigData?.notifyEmails) {
+      setEmailEmails(emailConfigData.notifyEmails.split(',').map(s => s.trim()).filter(Boolean))
+    }
+  }, [emailConfigData])
+
+  useEffect(() => {
     if (scheduleQuery.data?.config) {
       const c = scheduleQuery.data.config
       setSchEnable(c.enabled)
