@@ -106,7 +106,7 @@ export function useCreateSite() {
 export function useUpdateSite() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data) => api.put(API.SITES, data),
+    mutationFn: (data) => api.patch(`/api/sites/${data.id}`, data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['sites'] })
       if (vars?.id) {
@@ -151,7 +151,7 @@ export function useBatchCheckCategory() {
 export function useUpdateSortOrder() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, sortOrder }) => api.put(API.SITES, { id, sortOrder }),
+    mutationFn: ({ id, sortOrder }) => api.patch(`/api/sites/${id}`, { sortOrder }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
   })
 }
@@ -159,7 +159,7 @@ export function useUpdateSortOrder() {
 export function useUpdateSchedule() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, scheduleCron }) => api.put(API.SITES, { id, scheduleCron }),
+    mutationFn: ({ id, scheduleCron }) => api.patch(`/api/sites/${id}`, { scheduleCron }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
   })
 }
