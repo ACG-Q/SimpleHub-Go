@@ -5,8 +5,6 @@ export const API = {
   SCHEDULE_CONFIG: '/api/schedule-config',
   AUTH: '/api/auth/login',
   CATEGORY_CHECK: '/api/categories/:id/check',
-  SITES_CHECK_ALL: '/api/sites/check-all',
-  SITES_UNCATEGORIZED: '/api/sites/uncategorized',
   EMAIL_CONFIG_TEST: '/api/email-config/test',
   EXPORTS_SITES: '/api/exports/sites',
   SITES_IMPORT: '/api/sites/import',

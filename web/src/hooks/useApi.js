@@ -216,15 +216,7 @@ export function useSaveScheduleConfig() {
 export function useTriggerGlobalCheck() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => api.post(API.SITES_CHECK_ALL),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
-  })
-}
-
-export function useDeleteUncategorized() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () => api.del(API.SITES_UNCATEGORIZED),
+    mutationFn: () => api.post('/api/schedule-config/trigger'),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
   })
 }
