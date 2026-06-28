@@ -4,7 +4,7 @@ export const API = {
   EMAIL_CONFIG: '/api/email-config',
   SCHEDULE_CONFIG: '/api/schedule-config',
   AUTH: '/api/auth/login',
-  SITES_BATCH_CHECK: '/api/sites/batch-check',
+  CATEGORY_CHECK: '/api/categories/:id/check',
   SITES_CHECK_ALL: '/api/sites/check-all',
   SITES_UNCATEGORIZED: '/api/sites/uncategorized',
   EMAIL_CONFIG_TEST: '/api/email-config/test',

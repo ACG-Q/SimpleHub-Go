@@ -140,18 +140,10 @@ export function useCheckSite() {
   })
 }
 
-export function useBatchCheckSites() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (ids) => api.post(API.SITES_BATCH_CHECK, { ids }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
-  })
-}
-
 export function useBatchCheckCategory() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (categoryId) => api.post(API.SITES_BATCH_CHECK, { categoryId }),
+    mutationFn: (categoryId) => api.post(API.CATEGORY_CHECK.replace(':id', categoryId)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sites'] }),
   })
 }
