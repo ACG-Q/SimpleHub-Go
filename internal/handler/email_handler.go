@@ -33,7 +33,9 @@ func (h *EmailHandler) Test(c *gin.Context) {
 		Fail(c, http.StatusInternalServerError, "通知服务不可用")
 		return
 	}
-	if err := h.notifService.SendTestEmail(); err != nil {
+	var opts service.SendTestEmailOptions
+	c.ShouldBindJSON(&opts)
+	if err := h.notifService.SendTestEmail(&opts); err != nil {
 		Fail(c, http.StatusInternalServerError, err.Error())
 		return
 	}

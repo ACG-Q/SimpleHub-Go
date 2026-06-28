@@ -50,8 +50,13 @@ func (s *NotificationService) SendModelChangeNotification(siteName string, diff 
 	}
 }
 
+type SendTestEmailOptions struct {
+	NotifyEmails string `json:"notifyEmails"`
+	FromEmail    string `json:"fromEmail"`
+}
+
 // TEST: 发送测试邮件
-func (s *NotificationService) SendTestEmail() error {
+func (s *NotificationService) SendTestEmail(opts *SendTestEmailOptions) error {
 	cfg, err := s.emailRepo.Get()
 	if err != nil {
 		return fmt.Errorf("获取邮件配置失败: %w", err)
@@ -60,26 +65,44 @@ func (s *NotificationService) SendTestEmail() error {
 	if err != nil {
 		return fmt.Errorf("解密API密钥失败: %w", err)
 	}
+
 	emails := parseEmails(cfg.NotifyEmails)
+	if opts != nil && opts.NotifyEmails != "" {
+		emails = parseEmails(opts.NotifyEmails)
+	}
 	if len(emails) == 0 {
 		return fmt.Errorf("未配置通知邮箱")
 	}
+
+	fromEmail := cfg.FromEmail
+	if opts != nil && opts.FromEmail != "" {
+		fromEmail = opts.FromEmail
+	}
+
 	html := `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="font-family: sans-serif; padding: 20px;">
 <h2>测试邮件</h2>
 <p>这是一封来自 SimpleHub 的测试邮件，表示邮件配置正常工作。</p>
 </body></html>`
-	return s.sendViaResend(apiKey, emails, "【测试邮件】SimpleHub 通知服务", html)
+	return s.sendViaResendWithFrom(apiKey, fromEmail, emails, "【测试邮件】SimpleHub 通知服务", html)
 }
 
 func (s *NotificationService) sendViaResend(apiKey string, to []string, subject, html string) error {
-	client := resend.NewClient(apiKey)
-
 	from := "SimpleHub <onboarding@resend.dev>"
 	if cfg, err := s.emailRepo.Get(); err == nil && cfg.FromEmail != "" {
 		from = "SimpleHub <" + cfg.FromEmail + ">"
 	}
+	return s.sendResend(apiKey, from, to, subject, html)
+}
+
+func (s *NotificationService) sendViaResendWithFrom(apiKey, fromEmail string, to []string, subject, html string) error {
+	from := "SimpleHub <" + fromEmail + ">"
+	return s.sendResend(apiKey, from, to, subject, html)
+}
+
+func (s *NotificationService) sendResend(apiKey, from string, to []string, subject, html string) error {
+	client := resend.NewClient(apiKey)
 
 	params := &resend.SendEmailRequest{
 		From:    from,

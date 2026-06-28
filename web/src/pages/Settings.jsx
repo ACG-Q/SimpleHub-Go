@@ -66,14 +66,15 @@ export default function Settings() {
     try {
       const fromEmail = emailUseCustomFrom ? emailFromEmail : 'onboarding@resend.dev'
       await saveEmailConfigMutation.mutateAsync({ resendApiKey: emailApiKey, notifyEmails: emailEmails.join(','), enabled: true, fromEmail })
-      setEmailApiKey(''); setEmailEmails([])
+      setEmailApiKey('')
       showToast('邮件通知配置成功')
     } catch (e) { showToast(e.message || '保存失败', 'error') }
   }
 
   const testEmail = async () => {
     try {
-      await testEmailMutation.mutateAsync({ resendApiKey: emailApiKey, notifyEmails: emailEmails.join(',') })
+      const fromEmail = emailUseCustomFrom ? emailFromEmail : 'onboarding@resend.dev'
+      await testEmailMutation.mutateAsync({ notifyEmails: emailEmails.join(','), fromEmail })
       showToast('测试邮件已发送')
     } catch (e) { showToast(e.message || '发送失败', 'error') }
   }

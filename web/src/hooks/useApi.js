@@ -201,7 +201,7 @@ export function useSaveEmailConfig() {
 
 export function useTestEmail() {
   return useMutation({
-    mutationFn: () => api.post(API.EMAIL_CONFIG_TEST),
+    mutationFn: (data) => api.post(API.EMAIL_CONFIG_TEST, data),
   })
 }
 
