@@ -57,7 +57,7 @@ func (h *EmailHandler) Get(c *gin.Context) {
 
 func (h *EmailHandler) Upsert(c *gin.Context) {
 	var req struct {
-		ResendAPIKey string `json:"resendApiKey" binding:"required"`
+		ResendAPIKey string `json:"resendApiKey"`
 		NotifyEmails string `json:"notifyEmails" binding:"required"`
 		Enabled      *bool  `json:"enabled"`
 	}
@@ -79,10 +79,19 @@ func (h *EmailHandler) Upsert(c *gin.Context) {
 		}
 	}
 
-	encryptedKey, err := crypto.Encrypt(req.ResendAPIKey, h.encryptionKey)
-	if err != nil {
-		Fail(c, http.StatusInternalServerError, "加密失败")
-		return
+	var encryptedKey string
+	if req.ResendAPIKey != "" {
+		var err error
+		encryptedKey, err = crypto.Encrypt(req.ResendAPIKey, h.encryptionKey)
+		if err != nil {
+			Fail(c, http.StatusInternalServerError, "加密失败")
+			return
+		}
+	} else {
+		existing, err := h.emailRepo.Get()
+		if err == nil {
+			encryptedKey = existing.ResendAPIKeyEnc
+		}
 	}
 
 	enabled := true

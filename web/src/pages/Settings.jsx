@@ -126,7 +126,7 @@ export default function Settings() {
           <div className="space-y-4">
             <div>
               <Input label="Resend API Key" type="password" value={emailApiKey} onChange={e => setEmailApiKey(e.target.value)} placeholder="输入 Resend API Key" />
-              <Desc>Resend 服务的 API 密钥，用于发送通知邮件</Desc>
+              <Desc>在 <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="underline">resend.com</a> 注册 → API Keys → Create API Key → 复制粘贴至此</Desc>
             </div>
             <div>
               <TagInput label="通知邮箱" value={emailEmails} onChange={setEmailEmails} placeholder="输入邮箱后按 Enter" />
