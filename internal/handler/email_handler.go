@@ -46,12 +46,18 @@ func (h *EmailHandler) Get(c *gin.Context) {
 		Data(c, gin.H{
 			"enabled":      false,
 			"notifyEmails": "",
+			"fromEmail":    "onboarding@resend.dev",
 		})
 		return
+	}
+	fromEmail := cfg.FromEmail
+	if fromEmail == "" {
+		fromEmail = "onboarding@resend.dev"
 	}
 	Data(c, gin.H{
 		"enabled":      cfg.Enabled,
 		"notifyEmails": cfg.NotifyEmails,
+		"fromEmail":    fromEmail,
 	})
 }
 
@@ -59,6 +65,7 @@ func (h *EmailHandler) Upsert(c *gin.Context) {
 	var req struct {
 		ResendAPIKey string `json:"resendApiKey"`
 		NotifyEmails string `json:"notifyEmails" binding:"required"`
+		FromEmail    string `json:"fromEmail"`
 		Enabled      *bool  `json:"enabled"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -103,7 +110,11 @@ func (h *EmailHandler) Upsert(c *gin.Context) {
 		ID:              newID(),
 		ResendAPIKeyEnc: encryptedKey,
 		NotifyEmails:    req.NotifyEmails,
+		FromEmail:       req.FromEmail,
 		Enabled:         enabled,
+	}
+	if cfg.FromEmail == "" {
+		cfg.FromEmail = "onboarding@resend.dev"
 	}
 
 	if err := h.emailRepo.Upsert(cfg); err != nil {
@@ -114,5 +125,6 @@ func (h *EmailHandler) Upsert(c *gin.Context) {
 	Data(c, gin.H{
 		"enabled":      cfg.Enabled,
 		"notifyEmails": cfg.NotifyEmails,
+		"fromEmail":    cfg.FromEmail,
 	})
 }

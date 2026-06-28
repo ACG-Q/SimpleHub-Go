@@ -31,6 +31,7 @@ func (r *EmailConfigRepository) Upsert(cfg *model.EmailConfig) error {
 	return r.db.Model(&existing).Updates(map[string]interface{}{
 		"resend_api_key_enc": cfg.ResendAPIKeyEnc,
 		"notify_emails":      cfg.NotifyEmails,
+		"from_email":         cfg.FromEmail,
 		"enabled":            cfg.Enabled,
 	}).Error
 }

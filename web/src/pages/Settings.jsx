@@ -29,6 +29,8 @@ export default function Settings() {
 
   const [emailApiKey, setEmailApiKey] = useState('')
   const [emailEmails, setEmailEmails] = useState([])
+  const [emailFromEmail, setEmailFromEmail] = useState('')
+  const [emailUseCustomFrom, setEmailUseCustomFrom] = useState(false)
 
   const [schEnable, setSchEnable] = useState(false)
   const [schScheduleTime, setSchScheduleTime] = useState('09:00')
@@ -38,6 +40,15 @@ export default function Settings() {
   useEffect(() => {
     if (emailConfigData?.notifyEmails) {
       setEmailEmails(emailConfigData.notifyEmails.split(',').map(s => s.trim()).filter(Boolean))
+    }
+    if (emailConfigData?.fromEmail) {
+      if (emailConfigData.fromEmail === 'onboarding@resend.dev') {
+        setEmailUseCustomFrom(false)
+        setEmailFromEmail('')
+      } else {
+        setEmailUseCustomFrom(true)
+        setEmailFromEmail(emailConfigData.fromEmail)
+      }
     }
   }, [emailConfigData])
 
@@ -53,7 +64,8 @@ export default function Settings() {
 
   const saveEmailConfig = async () => {
     try {
-      await saveEmailConfigMutation.mutateAsync({ resendApiKey: emailApiKey, notifyEmails: emailEmails.join(','), enabled: true })
+      const fromEmail = emailUseCustomFrom ? emailFromEmail : 'onboarding@resend.dev'
+      await saveEmailConfigMutation.mutateAsync({ resendApiKey: emailApiKey, notifyEmails: emailEmails.join(','), enabled: true, fromEmail })
       setEmailApiKey(''); setEmailEmails([])
       showToast('邮件通知配置成功')
     } catch (e) { showToast(e.message || '保存失败', 'error') }
@@ -131,6 +143,39 @@ export default function Settings() {
             <div>
               <TagInput label="通知邮箱" value={emailEmails} onChange={setEmailEmails} placeholder="输入邮箱后按 Enter" />
               <Desc>输入邮箱地址后按 Enter 添加，支持多个邮箱</Desc>
+            </div>
+            <div>
+              <label className="text-sm font-semibold text-text block mb-2">发件邮箱</label>
+              <div className="space-y-2">
+                <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${!emailUseCustomFrom ? 'border-primary bg-primary-bg/40' : 'border-border'}`}>
+                  <input type="radio" name="fromEmail" checked={!emailUseCustomFrom} onChange={() => setEmailUseCustomFrom(false)} className="mt-0.5 accent-primary" />
+                  <div>
+                    <span className="text-sm font-medium">使用 Resend 测试邮箱（onboarding@resend.dev）</span>
+                    <p className="text-xs text-text-muted mt-0.5">只能发送到注册 Resend 时使用的邮箱，适合测试</p>
+                  </div>
+                </label>
+                <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${emailUseCustomFrom ? 'border-primary bg-primary-bg/40' : 'border-border'}`}>
+                  <input type="radio" name="fromEmail" checked={emailUseCustomFrom} onChange={() => setEmailUseCustomFrom(true)} className="mt-0.5 accent-primary" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium">自定义发件邮箱</span>
+                    {emailUseCustomFrom && (
+                      <input type="text" value={emailFromEmail} onChange={e => setEmailFromEmail(e.target.value)}
+                        placeholder="noreply@yourdomain.com"
+                        className="mt-2 w-full px-3 py-1.5 rounded-lg border border-border text-sm outline-none focus:border-primary-light focus:shadow-[0_0_0_3px_rgba(37,99,235,0.1)]" />
+                    )}
+                    <p className="text-xs text-text-muted mt-1.5">需在 Resend 中验证域名后使用</p>
+                  </div>
+                </label>
+              </div>
+              {emailUseCustomFrom && (
+                <Desc>
+                  自定义发件邮箱需要在 Resend 中添加并验证域名：① 登录 <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer" className="underline">resend.com/domains</a> → 点击 <strong>Add Domain</strong>
+                  ② 输入域名（建议使用子域名，如 <code>notifications.example.com</code>）
+                  ③ 将生成的 DNS 记录（TXT 用于 DKIM/SPF，MX 记录）添加到域名 DNS 解析中
+                  ④ 等待验证完成（通常 15 分钟，最长 72 小时）
+                  ⑤ 验证通过后，用该域名下的邮箱地址（如 <code>noreply@notifications.example.com</code>）作为发件邮箱
+                </Desc>
+              )}
             </div>
             {emailConfigData?.enabled && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-success-bg text-success text-sm">

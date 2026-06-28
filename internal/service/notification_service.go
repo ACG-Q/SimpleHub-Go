@@ -76,8 +76,13 @@ func (s *NotificationService) SendTestEmail() error {
 func (s *NotificationService) sendViaResend(apiKey string, to []string, subject, html string) error {
 	client := resend.NewClient(apiKey)
 
+	from := "SimpleHub <onboarding@resend.dev>"
+	if cfg, err := s.emailRepo.Get(); err == nil && cfg.FromEmail != "" {
+		from = "SimpleHub <" + cfg.FromEmail + ">"
+	}
+
 	params := &resend.SendEmailRequest{
-		From:    "SimpleHub <onboarding@resend.dev>",
+		From:    from,
 		To:      to,
 		Subject: subject,
 		Html:    html,
